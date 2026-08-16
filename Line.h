@@ -32,6 +32,7 @@ public:
     void set_cur_col(int col);
     void insert_at_cur(char ch);
     void delete_at_Cur();
+    void back_sp();
     void deleteFromCursor();
     void toggle_cursor();
     bool word_frwd();

@@ -5,6 +5,9 @@
 #include<fstream>
 #include<cstdlib>
 #include"Document.h"
+
+#ifndef ENABLE_VIRTUAL_TERMINAL_INPUT
+#endif
 using namespace std;
 Document docc;
 void clearScreen(WORD attr)
@@ -52,7 +55,7 @@ void SetConsoleSettings()
 	cfi.dwFontSize.X = 0;
 	cfi.dwFontSize.Y = 18;
 	cfi.FontFamily = FF_DONTCARE;
-	cfi.FontWeight = FW_NORMAL;
+	cfi.FontWeight = FW_NORMAL;          
 	const wchar_t* face = L"Consolas";
 	int wi = 0;
 	while (face[wi] != L'\0')
@@ -75,25 +78,13 @@ void SetConsoleSettings()
 	DWORD dwMode = 0;
 	GetConsoleMode(hIn, &dwMode);
 	dwMode &= ~ENABLE_PROCESSED_INPUT;
+	dwMode &= ~ENABLE_VIRTUAL_TERMINAL_INPUT;   
 	SetConsoleMode(hIn, dwMode);
-
 	CONSOLE_CURSOR_INFO cci;
 	cci.dwSize = 25;
 	cci.bVisible = false;
 	SetConsoleCursorInfo(hOut, &cci);
 }
-
-// ============================================================
-// DOUBLE BUFFERING (isi se flicker khatam hota hai)
-// ------------------------------------------------------------
-// Idea: screen pe seedha cout se likhne ki bajaye, hum pehle
-// pura frame ek INVISIBLE buffer (jo user ko nazar nahi aata)
-// mein taiyar karte hain, character-by-character. Jab pura
-// frame ready ho jata hai, tab EK HI call (WriteConsoleOutputA)
-// se poora blit karte hain aur SetConsoleActiveScreenBuffer se
-// turant swap kar dete hain. User ko kabhi "aadha bana hua"
-// frame nazar nahi aata, isliye flicker zero ho jata hai.
-// ============================================================
 const int BUF_W = 100;
 const int BUF_H = 35;
 CHAR_INFO frameBuf[BUF_H][BUF_W];
@@ -152,7 +143,6 @@ void setupBuffers()
 	SetConsoleActiveScreenBuffer(hBufA);
 	activeIsA = true;
 }
-
 void fb_clear(WORD attr)
 {
 	for (int r = 0; r < BUF_H; r++)
@@ -164,7 +154,6 @@ void fb_clear(WORD attr)
 		}
 	}
 }
-
 void fb_putc(int row, int col, char ch, WORD attr)
 {
 	if (row < 0 || row >= BUF_H || col < 0 || col >= BUF_W)
@@ -174,7 +163,6 @@ void fb_putc(int row, int col, char ch, WORD attr)
 	frameBuf[row][col].Char.AsciiChar = ch;
 	frameBuf[row][col].Attributes = attr;
 }
-
 void fb_hline(int row, int colStart, int count, char ch, WORD attr)
 {
 	for (int i = 0; i < count; i++)
@@ -182,7 +170,6 @@ void fb_hline(int row, int colStart, int count, char ch, WORD attr)
 		fb_putc(row, colStart + i, ch, attr);
 	}
 }
-
 int fb_print_str(int row, int col, const char* s, WORD attr)
 {
 	int c = col;
@@ -194,7 +181,6 @@ int fb_print_str(int row, int col, const char* s, WORD attr)
 	}
 	return c;
 }
-
 void fb_print_int(int row, int col, int val, WORD attr)
 {
 	char buf[12];
@@ -220,7 +206,6 @@ void fb_print_int(int row, int col, int val, WORD attr)
 		col++;
 	}
 }
-
 void fb_present(int cursorRow, int cursorCol)
 {
 	HANDLE hDraw = activeIsA ? hBufB : hBufA;
@@ -249,7 +234,6 @@ void fb_present(int cursorRow, int cursorCol)
 	SetConsoleActiveScreenBuffer(hDraw);
 	activeIsA = !activeIsA;
 }
-
 vector<Document> undo_stk;
 vector<Document> redo_stk;
 vector<char> cur_fname;
@@ -527,10 +511,6 @@ int main()
 	WORD help_txt = help_bg;
 
 	WORD cursor_hi = BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_INTENSITY;
-
-	// splash screen -- yeh abhi bhi original (single-buffer) tareeqe se hi
-	// dikhta hai, kyuke yeh sirf ek dafa chalta hai, flicker ka masla
-	// yahan hai hi nahi. Iske baad hum double-buffering switch on karte hain.
 	clearScreen(white_bg);
 	setColor(black_txt);
 	gotoRowCol(14, 24);
@@ -540,11 +520,7 @@ int main()
 	gotoRowCol(16, 24);
 	cout << "================================================";
 	Sleep(1500);
-
-	// ab se har frame double-buffered off-screen banega, taake
-	// koi flicker na ho, chahe har letter type ho ya kuch aur
 	setupBuffers();
-
 	char defname[9] = "save.txt";
 	for (int i = 0; i < 8; i++)
 	{
@@ -572,15 +548,8 @@ int main()
 	bool going = true;
 	while (going == true)
 	{
-		// ============================================================
-		// RENDER: sab kuch pehle invisible frameBuf mein banaya jata
-		// hai, screen pe seedha nahi likha jata. Isi wajah se flicker
-		// nahi hota -- user ko sirf poora tayyar frame hi dikhta hai.
-		// ============================================================
 		fb_clear(white_bg);
-
 		fb_hline(0, 0, BUF_W, '=', title_txt);
-
 		fb_hline(1, 0, BUF_W, ' ', title_bg);
 		if (mode == 'N')
 		{
@@ -601,13 +570,10 @@ int main()
 				tcol++;
 			}
 		}
-
 		fb_hline(2, 0, BUF_W, '=', title_txt);
-
 		int sr = 0;
 		int cr = 3;
 		int ccl = 2;
-
 		for (int a = 0; a < docc.chap_ct(); a++)
 		{
 			chapter& ch = docc.get_chap(a);
@@ -620,20 +586,15 @@ int main()
 					for (int f = 0; f < pr.get_line_ct(); f++)
 					{
 						Line& ln = pr.line_rf(f);
-
 						bool is_curr = (a == docc.get_cur_idx() && b == ch.get_cur_idx() && e == sc.get_cur_idx() && f == pr.get_cur_idx());
-
 						int row = 3 + sr;
 						int textStartCol = 2;
-
 						if (num_mode)
 						{
 							fb_print_int(row, 2, sr + 1, black_txt);
 							textStartCol = 10;
 						}
-
 						WORD lineColor = is_curr ? blue_txt : black_txt;
-
 						vector<char> txt = ln.get_txt();
 						int col = textStartCol;
 						for (int ti = 0; ti < (int)txt.size(); ti++)
@@ -641,7 +602,6 @@ int main()
 							fb_putc(row, col, txt[ti], lineColor);
 							col++;
 						}
-
 						if (is_curr)
 						{
 							cr = row;
@@ -674,9 +634,7 @@ int main()
 			fb_print_str(29, 2, ":w save :q quit :wq :q! :nc :ns :np new chap/sec/para", help_txt);
 			fb_print_str(30, 2, "/pat ?pat search :n :N next/prev %s/old/new/g replace set number", help_txt);
 		}
-
 		fb_hline(31, 0, BUF_W, '=', help_txt);
-
 		Line& curln_for_cursor = docc.get_cur_line();
 		int realCol = curln_for_cursor.get_cur_col();
 		vector<char> curTxt = curln_for_cursor.get_txt();
@@ -888,19 +846,17 @@ int main()
 		else if (mode == 'I')
 		{
 			Line& curln = docc.get_cur_line();
-
 			if (ch == 27)
 			{
 				mode = 'N';
 				sel_on = false;
 			}
-			else if (ch == 8)
+			else if (ch == 8 || ch == 127)
 			{
 				push_undo();
 				if (curln.get_cur_col() > 0)
 				{
-					curln.move_left();
-					curln.delete_at_Cur();
+					curln.back_sp();   
 				}
 				else
 				{
@@ -956,14 +912,6 @@ int main()
 			{
 				push_undo();
 				curln.unindent();
-			}
-			else if (ch == 127)
-			{
-				push_undo();
-				if (curln.get_cur_col() < curln.get_len())
-				{
-					curln.delete_at_Cur();
-				}
 			}
 			else if (ch == 3)
 			{
@@ -1026,7 +974,7 @@ int main()
 					}
 				}
 			}
-			else if (ch == 0 || ch == 224)
+			else if ((unsigned char)ch == 0 || (unsigned char)ch == 224)
 			{
 				char ch2 = _getch();
 				if (ch2 == 75)

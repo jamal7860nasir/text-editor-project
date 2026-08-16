@@ -114,7 +114,7 @@ bool Line::move_left()
 }
 bool Line::move_right()
 {
-    if (curCol + 1 < text.size())
+    if (curCol < (int)text.size())   
     {
         curCol++;
         return true;
@@ -185,6 +185,14 @@ bool Line::word_frwd()
         return false;
     }
     return true;
+}
+void Line::back_sp()
+{
+    if (curCol > 0)
+    {
+        curCol--;
+        dlt_chr(curCol);
+    }
 }
 bool Line::word_backwrd()
 {
